@@ -119,6 +119,14 @@ button:focus-visible, .seg input:focus-visible + span, .lvl input:focus-visible 
 .lvl label:first-child, .lvl label.impossible { grid-column: 1 / -1; }
 .lvl label.impossible input:checked + span { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 12%, var(--surface)); }
 .lvl label.impossible b { color: var(--coral); }
+.lvl label.impossible span { border-color: color-mix(in srgb, var(--coral) 60%, var(--line)); animation: pulse-impossivel 1.8s ease-in-out infinite; }
+.lvl label.impossible input:checked + span { animation: none; }
+@keyframes pulse-impossivel {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 55%, transparent); }
+  50% { transform: scale(1.025); }
+  70% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--coral) 0%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 0%, transparent); }
+}
 .seg.off { opacity: .35; pointer-events: none; }
 .credits { text-align: center; color: var(--muted); font-size: .85rem; padding-top: 6px; }
 .credits b { color: var(--ink); }
