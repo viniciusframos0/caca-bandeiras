@@ -153,7 +153,15 @@ button:focus-visible, .seg input:focus-visible + span, .lvl input:focus-visible 
 .chip.medio { background: color-mix(in srgb, var(--sun) 28%, var(--surface)); color: var(--ink); }
 .chip.dificil { background: var(--badbg); color: var(--bad); }
 .score { font-family: var(--display); font-weight: 800; font-size: 1.3rem; color: var(--ocean); font-variant-numeric: tabular-nums; }
-.quit { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: 8px 4px; min-height: 40px; }
+.quit { border: 2px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 700; padding: 6px 14px; min-height: 40px; border-radius: 999px; }
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: color-mix(in srgb, var(--ink) 55%, transparent);
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal-box { background: var(--surface); border-radius: 26px; padding: 24px 20px 20px; width: 100%; max-width: 380px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 14px; text-align: center; box-shadow: var(--shadow); animation: pop .3s cubic-bezier(.3, 1.5, .5, 1); }
+.modal-box h2 { font-size: 1.7rem; }
+.modal-box p { color: var(--muted); }
+.modal-box p b { color: var(--ink); }
+.danger-btn { border: 2px solid var(--bad); background: transparent; color: var(--bad); border-radius: 20px; min-height: 56px; font-family: var(--display); font-weight: 700; font-size: 1.15rem; }
 
 .timer { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
 .track { height: 14px; border-radius: 999px; background: var(--surface); overflow: hidden; border: 2px solid var(--line); }
@@ -279,7 +287,7 @@ button:focus-visible, .seg input:focus-visible + span, .lvl input:focus-visible 
         <span class="chip facil" id="chip">Fácil</span>
       </div>
       <span class="score" id="score">0 pts</span>
-      <button class="quit" id="quitBtn">Sair</button>
+      <button class="quit" id="quitBtn">Encerrar</button>
     </div>
 
     <div class="timer" id="timerWrap">
@@ -300,6 +308,15 @@ button:focus-visible, .seg input:focus-visible + span, .lvl input:focus-visible 
       <button class="big-btn" id="nextBtn">Próxima</button>
     </div>
   </section>
+
+  <div class="modal" id="confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
+    <div class="modal-box">
+      <h2 id="confirmTitle">Encerrar partida?</h2>
+      <p id="confirmText">Seu progresso nesta partida será perdido.</p>
+      <button class="big-btn" id="keepBtn">Continuar jogando</button>
+      <button class="danger-btn" id="endBtn">Sim, encerrar</button>
+    </div>
+  </div>
 
   <!-- RESULTADO -->
   <section id="result" hidden>
@@ -430,7 +447,7 @@ function hush() { try { window.speechSynthesis && window.speechSynthesis.cancel(
 
 /* ---------- Jogo ---------- */
 const state = { cfg: null, q: [], i: 0, score: 0, streak: 0, bestStreak: 0, answered: false, left: T, results: [] };
-let raf = 0, t0 = 0, lastSec = null, qToken = 0;
+let raf = 0, t0 = 0, lastSec = null, qToken = 0, paused = false;
 
 function buildQuiz(cfg) {
   const s = split(cfg.n, cfg.modo), out = [];
@@ -472,13 +489,14 @@ function showQuestion() {
   if (state.cfg.voz) {
     $('#timerWrap').classList.add('waiting'); $('#secs').textContent = 'Ouvindo…';
     say('De qual país é esta bandeira? ' + q.options.map((o, k) => `Letra ${'ABCD'[k]}: ${o[1]}`).join('. '),
-      () => { if (tok === qToken && !state.answered) startTimer(); });
+      () => { if (tok === qToken && !state.answered && !paused) startTimer(); });
   } else startTimer();
 }
 
-function startTimer() {
+function startTimer(from = T) {
+  cancelAnimationFrame(raf);
   $('#timerWrap').classList.remove('waiting');
-  t0 = performance.now(); lastSec = null;
+  t0 = performance.now() - (T - from) * 1000; lastSec = null;
   const step = now => {
     const left = Math.max(0, T - (now - t0) / 1000);
     state.left = left;
@@ -579,14 +597,23 @@ $('#opts').addEventListener('click', e => { const b = e.target.closest('.opt'); 
 $('#nextBtn').addEventListener('click', next);
 $('#againBtn').addEventListener('click', startGame);
 $('#setupBtn').addEventListener('click', quit);
-let quitArmed = 0;
-$('#quitBtn').addEventListener('click', () => {
-  const b = $('#quitBtn');
-  if (quitArmed) { clearTimeout(quitArmed); quitArmed = 0; b.textContent = 'Sair'; quit(); return; }
-  b.textContent = 'Toque de novo para sair';
-  quitArmed = setTimeout(() => { quitArmed = 0; b.textContent = 'Sair'; }, 2500);
-});
+function askQuit() {
+  paused = true; qToken++; cancelAnimationFrame(raf); hush();
+  const total = state.q.length, pts = state.score;
+  $('#confirmText').innerHTML = `Você está na pergunta <b>${state.i + 1} de ${total}</b>, com <b>${pts} pontos</b>. Se sair agora, o progresso desta partida será perdido.`;
+  $('#confirm').hidden = false;
+  $('#keepBtn').focus({ preventScroll: true });
+}
+function keepPlaying() {
+  $('#confirm').hidden = true; paused = false;
+  if (!state.answered) startTimer(state.left);
+}
+$('#quitBtn').addEventListener('click', askQuit);
+$('#keepBtn').addEventListener('click', keepPlaying);
+$('#endBtn').addEventListener('click', () => { $('#confirm').hidden = true; paused = false; quit(); });
+$('#confirm').addEventListener('click', e => { if (e.target.id === 'confirm') keepPlaying(); });
 document.addEventListener('keydown', e => {
+  if (!$('#confirm').hidden) { if (e.key === 'Escape') keepPlaying(); return; }
   if ($('#game').hidden) return;
   const k = 'abcd'.indexOf(e.key.toLowerCase()), d = '1234'.indexOf(e.key);
   if (!state.answered && (k >= 0 || d >= 0)) answer(k >= 0 ? k : d);
